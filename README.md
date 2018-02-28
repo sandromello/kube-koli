@@ -43,8 +43,9 @@ sudo systemctl restart kubelet
 ```bash
 NODENAME=$(hostname -f)
 ADVERTISE_ADDRESS=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)
-KUBERNETES_VERSION=v1.9.3
-OIDC_CLIENT_ID=yIR1CXurvuWJjqoTjocXq8GZS48ymSqU
+# https://github.com/kubernetes/kubernetes/releases
+KUBERNETES_VERSION=$(cat https://dl.k8s.io/release/stable.txt)
+OIDC_CLIENT_ID=
 OIDC_ISSUER_URL=https://koli.auth0.com/
 CLUSTER_NAME=rhea
 

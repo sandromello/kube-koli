@@ -1,0 +1,259 @@
+# Configure a NLB on aws to enable traffic though ports 8000 and 8443
+apiVersion: v1
+kind: Service
+metadata:
+  name: kong-proxy
+  namespace: koli-system
+spec:
+  # BEWARE: Cluster type doesn't preserve the source client IP
+  externalTrafficPolicy: Cluster
+  ports:
+  - name: kong-proxy
+    nodePort: 30080
+    port: 8000
+    protocol: TCP
+    targetPort: 8000
+  - name: kong-proxy-ssl
+    nodePort: 30443
+    port: 8443
+    protocol: TCP
+    targetPort: 8443
+  - name: k8s-https
+    nodePort: 31661
+    port: 5443
+    protocol: TCP
+    targetPort: 6443
+  # AWS LB with *.kolihub.io certificate
+  - name: kong-k8s-api
+    nodePort: 30600
+    port: 6000
+    protocol: TCP
+    targetPort: 6000
+  selector:
+    app: kong
+  type: NodePort
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kong-admin
+  namespace: koli-system
+spec:
+  ports:
+  - name: kong-admin
+    port: 80
+    protocol: TCP
+    targetPort: 8001
+  selector:
+    app: kong
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: k8smutator
+  namespace: koli-system
+  labels:
+    koli-app: k8smutator
+spec:
+  ports:
+  - name: https
+    port: 443
+    protocol: TCP
+    targetPort: 8443
+  - name: http
+    port: 80
+    protocol: TCP
+    targetPort: 8080
+  - name: monitoring
+    port: 20251
+    protocol: TCP
+    targetPort: 20251
+  selector:
+    koli-app: k8smutator
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: kong
+    name: kong
+  name: kong
+  namespace: koli-system
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: kong
+      name: kong
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: kong
+        name: kong
+    spec:
+      containers:
+      - command:
+        - /bin/bash
+        - -c
+        - "kong prepare -p /usr/local/kong --nginx-conf /opt/nginx-koli-template.conf --vv && /usr/local/openresty/nginx/sbin/nginx -c /usr/local/kong/nginx.conf -p /usr/local/kong"
+        env:
+        - name: KONG_LOG_LEVEL
+          value: notice
+        - name: KONG_PG_USER
+          valueFrom:
+            secretKeyRef:
+              name: pg-credentials
+              key: username
+        - name: KONG_PG_DATABASE
+          value: kong
+        - name: KONG_PG_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: pg-credentials
+              key: password
+        - name: KONG_PG_HOST
+          value: postgres.koli-system.svc.cluster.local
+        - name: KONG_ADMIN_LISTEN
+          value: 0.0.0.0:8001
+        - name: KONG_HTTP2
+          value: "on"
+        - name: KONG_PROXY_ACCESS_LOG
+          value: /dev/stdout
+        - name: KONG_PROXY_ERROR_LOG
+          value: /dev/stderr
+        - name: KONG_ADMIN_ACCESS_LOG
+          value: /dev/stdout
+        - name: KONG_ADMIN_ERROR_LOG
+          value: /dev/stderr
+        - name: KONG_NGINX_DAEMON
+          value: 'off'
+        image: kong:0.12.1
+        imagePullPolicy: IfNotPresent
+        name: kong
+        ports:
+        - containerPort: 8001
+          name: admin
+          protocol: TCP
+        - containerPort: 8444
+          name: admin-ssl
+          protocol: TCP
+        - containerPort: 8000
+          name: proxy
+          protocol: TCP
+        - containerPort: 8443
+          name: proxy-ssl
+          protocol: TCP
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /opt
+          name: koli-custom-template
+        - mountPath: /usr/local/kong/ssl
+          name: kong-ssl
+      - command:
+        - /bin/bash
+        - -c
+        - |
+          #!/bin/bash
+          while true; do
+            curl -s http://127.0.0.1:8001/apis >/dev/null
+            if [[ !$? -eq 0 ]]; then
+              echo 'Kong API is not ready yet!'
+              sleep 5
+              continue
+            fi
+            break
+          done
+
+          echo "Configuring Kubernetes => api.kolihub.io"
+          curl -s -X POST http://127.0.0.1:8001/apis/ \
+              --data "name=kubernetes" \
+              --data "upstream_url=https://kubernetes.default.svc.cluster.local" \
+              --data "hosts=api.kolihub.io, api.rhea.kolihub.io" >/dev/null
+
+          echo "Configuring CORS Plugin for Kubernetes"
+          curl -s -X POST http://127.0.0.1:8001/apis/kubernetes/plugins \
+              --data "name=cors" \
+              --data "config.origins=*" \
+              --data "config.methods=GET, POST, PUT, PATCH, DELETE" \
+              --data "config.headers=Authorization, Accept, Accept-Version, Content-Type" \
+              --data "config.max_age=3600" >/dev/null
+
+          echo "Configuring Heapster => heapster.kolihub.io"
+          curl -s -X POST http://127.0.0.1:8001/apis/ \
+              --data "name=heapster" \
+              --data "upstream_url=http://heapster.kube-system.svc.cluster.local:8082" \
+              --data "hosts=heapster.kolihub.io" >/dev/null
+
+          echo "Configuring CORS Plugin for Heapster"
+          curl -X POST http://127.0.0.1:8001/apis/heapster/plugins \
+              --data "name=cors" \
+              --data "config.origins=*" \
+              --data "config.methods=GET, POST, PUT, PATCH, DELETE" \
+              --data "config.headers=Authorization, Accept, Accept-Version, Content-Type" \
+              --data "config.max_age=3600" >/dev/null
+
+          echo "Configuring GIT API => gitapi.kolihub.io"
+          curl -s -X POST http://127.0.0.1:8001/apis/ \
+              --data "name=gitapi" \
+              --data "upstream_url=http://git-api.koli-system.svc.cluster.local:8001" \
+              --data "hosts=gitapi.kolihub.io" >/dev/null
+
+          echo "Configuring CORS Plugin for GIT API"
+          curl -X POST http://127.0.0.1:8001/apis/gitapi/plugins \
+              --data "name=cors" \
+              --data "config.origins=*" \
+              --data "config.methods=GET, POST, PUT, PATCH, DELETE" \
+              --data "config.headers=Authorization, Accept, Accept-Version, Content-Type" \
+              --data "config.max_age=3600" >/dev/null
+
+          # echo "Configuring GIT Server => git.kolihub.io"
+          # curl -s -X POST http://127.0.0.1:8001/apis/ \
+          #     --data "name=gitserver" \
+          #     --data "upstream_url=http://git-server.koli-system.svc.cluster.local:8000" \
+          #     --data "hosts=git.kolihub.io" >/dev/null
+
+          #echo "Configuring Kong Admin => kong-admin.kolihub.io"
+          #curl -s -X POST http://127.0.0.1:8001/apis/ \
+          #    --data "name=kongadmin" \
+          #    --data "upstream_url=http://127.0.0.1:8001" \
+          #    --data "hosts=kong-admin.kolihub.io, kong-admin.koli-system, kong-admin, kong-admin.gaia.kolihub.io" >/dev/null
+
+          echo "Configuring Broker Server => broker.kolihub.io"
+          curl -s -X POST http://127.0.0.1:8001/apis/ \
+              --data "name=broker" \
+              --data "upstream_url=http://broker.koli-system.svc.cluster.local:8000" \
+              --data "hosts=broker.kolihub.io" >/dev/null
+
+          echo "Configuring CORS Plugin for Broker API"
+          curl -X POST http://127.0.0.1:8001/apis/broker/plugins \
+              --data "name=cors" \
+              --data "config.origins=*" \
+              --data "config.methods=GET, POST, PUT, PATCH, DELETE" \
+              --data "config.headers=Authorization, Accept, Accept-Version, Content-Type" \
+              --data "config.max_age=3600" >/dev/null
+          # Sleep forever
+          /bin/bash -c "trap : TERM INT; sleep infinity & wait"
+        image: quay.io/koli/base:0.1.0
+        imagePullPolicy: IfNotPresent
+        name: provisoning
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - configMap:
+          defaultMode: 420
+          name: kong-init-config
+        name: koli-custom-template
+      - name: kong-ssl
+        secret:
+          defaultMode: 440
+          secretName: kong-ssl

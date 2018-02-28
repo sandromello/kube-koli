@@ -1,0 +1,11 @@
+apiVersion: platform.koli.io/v1
+kind: Domain
+metadata:
+  finalizers:
+  - kolihub.io/kong
+  name: kolihub-io
+  namespace: koli-system
+spec:
+  delegates:
+  - '*'
+  primary: kolihub.io

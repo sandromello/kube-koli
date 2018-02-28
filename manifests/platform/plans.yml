@@ -1,0 +1,136 @@
+apiVersion: platform.koli.io/v1
+kind: Plan
+metadata:
+  name: hobby-5g
+  namespace: koli-system
+spec:
+  storage: 5G
+  type: Storage
+---
+apiVersion: platform.koli.io/v1
+kind: Plan
+metadata: 
+  labels:
+    kolihub.io/default: "false"
+  name: standard1-large
+  namespace: koli-system
+spec:
+  defaultClusterRole: koli:default-users
+  resources:
+    limits:
+      cpu: 4608m
+      memory: 6144M
+    requests:
+      cpu: 1536m
+      memory: 6144M
+---
+apiVersion: platform.koli.io/v1
+kind: Plan
+metadata:
+  labels:
+    kolihub.io/default: "false"
+  name: standard1-medium
+  namespace: koli-system
+spec:
+  defaultClusterRole: koli:mutator:default
+  resources:
+    limits:
+      cpu: 3072m
+      memory: 4096M
+    requests:
+      cpu: 1024m
+      memory: 4096M
+---
+apiVersion: platform.koli.io/v1
+kind: Plan
+metadata:
+  labels:
+    kolihub.io/default: "false"
+  name: standard1-micro
+  namespace: koli-system
+spec:
+  defaultClusterRole: koli:mutator:default
+  resources:
+    limits:
+      cpu: 768m
+      memory: 1024M
+    requests:
+      cpu: 256m
+      memory: 1024M
+---
+apiVersion: platform.koli.io/v1
+kind: Plan
+metadata:
+  labels:
+    kolihub.io/default: "false"
+  name: standard1-nano
+  namespace: koli-system
+spec:
+  defaultClusterRole: koli:mutator:default
+  resources:
+    limits:
+      cpu: 384m
+      memory: 512M
+    requests:
+      cpu: 128m
+      memory: 512M
+---
+apiVersion: platform.koli.io/v1
+kind: Plan
+metadata:
+  labels:
+    kolihub.io/default: "false"
+  name: standard1-small
+  namespace: koli-system
+spec:
+  defaultClusterRole: koli:mutator:default
+  resources:
+    limits:
+      cpu: 1536m
+      memory: 2048M
+    requests:
+      cpu: 512m
+      memory: 2048M
+---
+apiVersion: platform.koli.io/v1
+kind: Plan
+metadata:
+  labels:
+    kolihub.io/default: "true"
+  name: standard1-tiny
+  namespace: koli-system
+spec:
+  defaultClusterRole: koli:mutator:default
+  hard:
+    configmaps: 20
+    persistentvolumeclaims: 5
+    pods: 10
+    replicationcontrollers: 0
+    secrets: 20
+    services: 40
+    services.loadbalancers: 0
+    services.nodeports: 0
+  resources:
+    limits:
+      cpu: 192m
+      memory: 256M
+    requests:
+      cpu: 64m
+      memory: 256M
+---
+apiVersion: platform.koli.io/v1
+kind: Plan
+metadata:
+  labels:
+    kolihub.io/default: "false"
+  name: standard1-xlarge
+  namespace: koli-system
+spec:
+  defaultClusterRole: koli:mutator:default
+  resources:
+    limits:
+      cpu: 6144m
+      memory: 8192M
+    requests:
+      cpu: 2048m
+      memory: 8192M

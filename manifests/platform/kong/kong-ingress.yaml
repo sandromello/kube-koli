@@ -1,0 +1,121 @@
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRole
+metadata:
+  name: kong-ingress-controller 
+rules:
+- apiGroups:
+  - platform.koli.io
+  resources:
+  - domains
+  verbs:
+  - "*"
+- apiGroups:
+  - apiextensions.k8s.io
+  resources:
+  - customresourcedefinitions
+  verbs:
+  - "*"
+- apiGroups:
+  - ""
+  resources:
+  - services
+  - events
+  verbs:
+  - "*"
+- apiGroups:
+  - extensions
+  - apps
+  resources:
+  - ingresses
+  verbs:
+  - get
+  - list
+  - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRoleBinding
+metadata:
+  name: kong-ingress-controller
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kong-ingress-controller
+subjects:
+- kind: ServiceAccount
+  name: default
+  namespace: koli-system
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    koli-app: kong-ingress
+  name: kong-ingress-prometheus-discovery
+  namespace: koli-system
+spec:
+  selector:
+    koli-app: kong-ingress
+  clusterIP: None
+  ports:
+  - name: monitoring
+    port: 20251
+    protocol: TCP
+    targetPort: 20251
+  sessionAffinity: None
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    koli-app: kong-ingress
+  name: kong-ingress
+  namespace: koli-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      koli-app: kong-ingress
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        koli-app: kong-ingress
+    spec:
+      containers:
+      - args:
+        - --v=4
+        - --kong-server=http://kong-admin
+        - --auto-claim
+        - --logtostderr
+        - --wipe-on-delete
+        - --tls-insecure
+        image: quay.io/koli/kong-ingress:development
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /healthz
+            port: 20251
+            scheme: HTTP
+          initialDelaySeconds: 15
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 15
+        name: kong-ingress
+        resources: {}
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      securityContext: {}
+      terminationGracePeriodSeconds: 30

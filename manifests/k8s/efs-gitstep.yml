@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  labels:
+    app: gitstep
+  name: efs-cluster-gitstep
+spec:
+  accessModes:
+  - ReadWriteMany
+  capacity:
+    storage: 1Ti
+  nfs:
+    path: /
+    server: <NFS-SERVER>
+  persistentVolumeReclaimPolicy: Retain
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: efs-gitstep
+  namespace: koli-system
+spec:
+  accessModes:
+  - ReadWriteMany
+  resources:
+    requests:
+      storage: 200Gi
+  storageClassName: ""
+  volumeName: efs-cluster-gitstep

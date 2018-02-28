@@ -1,0 +1,76 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  labels:
+    role: alert-rules
+    prometheus: kube-prom
+  name: exporter-platform
+  namespace: monitoring
+data:
+  koli.rules.yaml: |
+    groups:
+    - name: koli.rules
+      rules:
+      - alert: KoliPostgresDatabaseDown
+        expr: absent(kube_replicationcontroller_status_replicas{namespace="koli-system", replicationcontroller="postgres"})
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          description: There is no running Postgres database. Broker, Kong and the Ingress Controller will not run properly
+          runbook: https://docs.koli.com.br/
+          summary: Postgres database is down
+      - alert: KoliBrokerAPIServerDown
+        expr: absent(kube_deployment_status_replicas_available{deployment="broker", namespace="koli-system"} == 1)
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          description: There is no running Broker API Server. Login to the platform will be unavailable
+          runbook: https://docs.koli.com.br/
+          summary: Broker Server is down
+      - alert: KoliKongAPIServerDown
+        expr: absent(kube_deployment_status_replicas_available{deployment="kong", namespace="koli-system"} > 1)
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          description: There is no running Kong API Server. Access to all services will be unavailable from outside of the cluster
+          runbook: https://docs.koli.com.br/
+          summary: Kong API Server is down
+      - alert: KoliGitstepDown
+        expr: absent(up{job="gitstep"} == 1)
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          description: There is no running gitstep web server. Build management and github integration will fail
+          runbook: https://docs.koli.com.br/
+          summary: Gitstep Web Server is down
+      - alert: KoliMutatorDown
+        expr: absent(up{job="k8smutator"} == 1)
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          description: There is no running mutator web server. Some kubernetes requests will fail.
+          runbook: https://docs.koli.com.br/
+          summary: Mutator Web Server is down
+      - alert: KoliKongIngressDown
+        expr: absent(up{job="kong-ingress-prometheus-discovery"} == 1)
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          description: There is no running Kong ingress controller. Route management are not making progress.
+          runbook: https://docs.koli.com.br/
+          summary: Kong Ingress controller is down
+      - alert: KoliControllerDown
+        expr: absent(up{job="koli-controller-prometheus-discovery"} == 1)
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          description: There is no running Koli controller manager. App management controllers are not making progress.
+          runbook: https://docs.koli.com.br/
+          summary: Koli controller manager is down

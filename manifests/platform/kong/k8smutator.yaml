@@ -1,0 +1,71 @@
+# DANGER ROLE BINDING!
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: k8smutator-cluster-role-enforcer
+  namespace: koli-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+- kind: ServiceAccount
+  name: default
+  namespace: koli-system
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    koli-app: k8smutator
+  name: k8smutator
+  namespace: koli-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      koli-app: k8smutator
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        koli-app: k8smutator
+    spec:
+      containers:
+      - command:
+        - k8smutator
+        - --platform-pub-key=/etc/pki/generic/public/auth0.crt
+        # - --cert-file=/usr/share/misc/tls.crt
+        # - --key-file=/usr/share/misc/tls.key
+        - --images=slugrunner,slugbuilder,postgres:9.5.7,nginx,mariadb:10.2,mariadb:10.2.6,mariadb:10.3.0,memcached:1.4.37,redis:3.0.7,redis:3.2.9,mysql:5.7.18,mysql:8.0.1,mongo:3.4.4,busybox,slugrunner:v0.4.0-beta
+        - --logtostderr
+        - --v=4
+        image: quay.io/koli/k8s-mutator:development
+        imagePullPolicy: IfNotPresent
+        name: k8smutator
+        ports:
+        - containerPort: 8443
+          name: secure
+          protocol: TCP
+        - containerPort: 20251
+          name: monitoring
+          protocol: TCP
+        resources: {}
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /etc/pki/generic/public
+          name: auth0
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - name: auth0
+        secret:
+          defaultMode: 420
+          secretName: auth0

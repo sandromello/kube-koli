@@ -1,0 +1,95 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: broker
+  namespace: koli-system
+spec:
+  ports:
+  - name: broker
+    port: 80
+    protocol: TCP
+    targetPort: 8080
+  selector:
+    app: broker
+  sessionAffinity: None
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: broker
+  name: broker
+  namespace: koli-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: broker
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+    type: RollingUpdate
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: broker
+    spec:
+      containers:
+      - args:
+        - --spa-pubkey-path=/etc/pki/generic/public/auth0.crt
+        - --ni-audience-url=https://koli.auth0.com/api/v2/
+        - --scheme=http
+        - --port=8080
+        - --host=0.0.0.0
+        command:
+        - brokerserver
+        env:
+        - name: DBNAME
+          value: broker
+        - name: DBUSER
+          value: pgbroker
+        - name: DBPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: pg-credentials
+              key: password
+        - name: SWAGGERPATH
+          value: /usr/local/share/doc
+        - name: DBHOST
+          value: postgres.koli-system.svc.cluster.local
+        - name: NI_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              key: ni-secret.key
+              name: auth0
+        - name: SPA_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              key: spa-secret.key
+              name: auth0
+        - name: DEBUG
+          value: "true"
+        image: quay.io/koli/broker:v0.1.2-alpha
+        imagePullPolicy: Always
+        name: broker
+        ports:
+        - containerPort: 8080
+          protocol: TCP
+        resources: {}
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /etc/pki/generic/public
+          name: auth0
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - name: auth0
+        secret:
+          defaultMode: 420
+          secretName: auth0

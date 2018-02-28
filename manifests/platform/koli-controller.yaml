@@ -1,0 +1,77 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    koli-app: koli-controller
+  name: koli-controller
+  namespace: koli-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      koli-app: koli-controller
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        koli-app: koli-controller
+    spec:
+      containers:
+      - args:
+        - --slugbuilder-image=quay.io/koli/slugbuilder:v0.4.0-beta
+        - --slugrunner-image=quay.io/koli/slugrunner:v0.4.0-beta
+        - --git-release-host=http://git-api.koli-system:8001
+        - --platform-secret=$(PLATFORM_SECRET)
+        - --cluster-name=rhea
+        - --default-domain=kolihub.io
+        - --logtostderr
+        - --tls-insecure
+        - --v=3
+        image: quay.io/koli/koli-controller:development
+        env:
+        - name: PLATFORM_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: auth0
+              key: 'spa-secret.key'
+        imagePullPolicy: Always
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /healthz
+            port: 20251
+            scheme: HTTP
+          initialDelaySeconds: 15
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 15
+        name: koli-controller
+        resources: {}
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    koli-app: koli-controller
+  name: koli-controller-prometheus-discovery
+  namespace: koli-system
+spec:
+  clusterIP: None
+  ports:
+  - name: monitoring
+    port: 20251
+    protocol: TCP
+    targetPort: 20251
+  selector:
+    koli-app: koli-controller
+  type: ClusterIP

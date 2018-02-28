@@ -1,0 +1,33 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  labels:
+    app: postgres
+  name: efs-cluster-postgres
+  namespace: koli-system
+spec:
+  accessModes:
+  - ReadWriteMany
+  capacity:
+    storage: 200Gi
+  nfs:
+    path: /
+    server: <NFS-SERVER>
+  persistentVolumeReclaimPolicy: Retain
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: efs-postgres
+  namespace: koli-system
+spec:
+  accessModes:
+  - ReadWriteMany
+  resources:
+    requests:
+      storage: 100Gi
+  selector:
+    matchLabels:
+      app: postgres
+  storageClassName: ""
+  volumeName: efs-cluster-postgres

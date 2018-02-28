@@ -1,0 +1,18 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  labels:
+    prometheus: kube-prom
+  name: k8smutator
+  namespace: monitoring
+spec:
+  endpoints:
+  - interval: 30s
+    port: monitoring
+  jobLabel: koli-app
+  namespaceSelector:
+    matchNames:
+    - koli-system
+  selector:
+    matchLabels:
+      koli-app: k8smutator

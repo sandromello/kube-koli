@@ -1,0 +1,45 @@
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  name: monthly-invoice
+  namespace: koli-system
+spec:
+  concurrencyPolicy: Replace
+  failedJobsHistoryLimit: 60
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - args:
+            - --paypal-url=https://api.paypal.com/v1
+            - --paypal-account=founders@koli.com.br
+            - --paypal-client-id=/etc/pki/generic/public/paypal/client-id
+            - --paypal-secret=/etc/pki/generic/public/paypal/secret.key
+            - --broker-url=http://broker.koli-system/v1alpha1
+            - --broker-secret=/etc/pki/generic/public/auth0/spa-secret.key
+            command:
+            - /usr/local/bin/koli-invoice.py
+            image: quay.io/koli/billing:v0.0.1
+            imagePullPolicy: Always
+            name: koli-billing
+            volumeMounts:
+            - mountPath: /etc/pki/generic/public/auth0
+              name: auth0
+            - mountPath: /etc/pki/generic/public/paypal
+              name: paypal
+          dnsPolicy: ClusterFirst
+          restartPolicy: OnFailure
+          terminationGracePeriodSeconds: 30
+          volumes:
+          - name: auth0
+            secret:
+              defaultMode: 420
+              secretName: auth0
+          - name: paypal
+            secret:
+              defaultMode: 420
+              secretName: paypal
+  schedule: 0 5 5 * *
+  successfulJobsHistoryLimit: 60
+  suspend: false

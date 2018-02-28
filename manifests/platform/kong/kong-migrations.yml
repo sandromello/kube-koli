@@ -1,0 +1,30 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kong-migration
+  namespace: koli-system
+spec:
+  template:
+    metadata:
+      name: kong-migration
+    spec:
+      containers:
+      - name: kong-migration
+        image: kong:0.12.1
+        env:
+          - name: KONG_NGINX_DAEMON
+            value: 'off'
+          - name: KONG_PG_USER
+            valueFrom:
+              secretKeyRef:
+                name: pg-credentials
+                key: username
+          - name: KONG_PG_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: pg-credentials
+                key: password
+          - name: KONG_PG_HOST
+            value: postgres.koli-system.svc.cluster.local
+        command: [ "/bin/sh", "-c", "kong migrations up" ]
+      restartPolicy: Never

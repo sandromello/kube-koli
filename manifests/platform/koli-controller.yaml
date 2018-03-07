@@ -22,7 +22,7 @@ spec:
     spec:
       containers:
       - args:
-        - --slugbuilder-image=quay.io/koli/slugbuilder:v0.4.0-beta
+        - --slugbuilder-image=quay.io/koli/slugbuilder:v0.4.1-beta
         - --slugrunner-image=quay.io/koli/slugrunner:v0.4.0-beta
         - --git-release-host=http://git-api.koli-system:8001
         - --platform-secret=$(PLATFORM_SECRET)

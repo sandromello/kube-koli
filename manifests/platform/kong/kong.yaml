@@ -229,7 +229,7 @@ spec:
           echo "Configuring Broker Server => broker.kolihub.io"
           curl -s -X POST http://127.0.0.1:8001/apis/ \
               --data "name=broker" \
-              --data "upstream_url=http://broker.koli-system.svc.cluster.local:8000" \
+              --data "upstream_url=http://broker.koli-system.svc.cluster.local" \
               --data "hosts=broker.kolihub.io" >/dev/null
 
           echo "Configuring CORS Plugin for Broker API"

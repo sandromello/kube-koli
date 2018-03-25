@@ -60,6 +60,11 @@ spec:
           value: /usr/local/share/doc
         - name: DBHOST
           value: postgres.koli-system.svc.cluster.local
+        - name: NI_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              key: ni-client-id.key
+              name: auth0
         - name: NI_CLIENT_SECRET
           valueFrom:
             secretKeyRef:

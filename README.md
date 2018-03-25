@@ -44,7 +44,7 @@ sudo systemctl restart kubelet
 NODENAME=$(hostname -f)
 ADVERTISE_ADDRESS=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)
 # https://github.com/kubernetes/kubernetes/releases
-KUBERNETES_VERSION=$(cat https://dl.k8s.io/release/stable.txt)
+KUBERNETES_VERSION=$(curl -sL https://dl.k8s.io/release/stable.txt)
 OIDC_CLIENT_ID=
 OIDC_ISSUER_URL=https://koli.auth0.com/
 CLUSTER_NAME=rhea
@@ -178,7 +178,7 @@ kubectl create secret -n koli-system generic pg-credentials \
   --from-literal=password=$(date +%s | shasum | base64 | head -c 32 ; echo) \
   --from-literal=username=system
 
-SECRETS_PATH=
+SECRETS_PATH=/keybase/team/koliteam.board
 
 # auth0 credentials
 AUTH0_SINGLE_PAGE_APP_CRT_PATH=$SECRETS_PATH/single-page-app-auth0.crt
@@ -201,8 +201,8 @@ kubectl create secret -n koli-system generic kong-ssl \
   --from-file=kong-default.key=$KOLIHUB_WILDCARD_KEY_PATH 
 
 # Cronjob billing
-PAYPAL_SECRET_KEY=
-PAYPAL_CLIENT_ID=
+PAYPAL_SECRET_KEY=$SECRETS_PATH/koli-paypal-client-id
+PAYPAL_CLIENT_ID=$SECRETS_PATH/koli-paypal-secret.key
 kubectl create secret -n koli-system generic paypal \
     --from-literal=client-id=$PAYPAL_CLIENT_ID \
     --from-literal=secret.key=$PAYPAL_SECRET_KEY
@@ -225,7 +225,8 @@ kubectl apply -f ./manifests/platform/kong/kong-ingress.yaml
 # Exec into the postgres pod and execute
 psql -U system postgres -c "CREATE DATABASE broker"
 psql -U system postgres -c "CREATE USER pgbroker WITH PASSWORD '$POSTGRES_PASSWORD'"
-psql -U system postgres -c "GRANT ALL PRIVILEGES ON DATABASE broker to pgbroker"
+psql -U system postgres -c "GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA broker to pgbroker"
+psql -U system broker -f ./broker-dump.sql
 
 kubectl apply -f ./manifests/platform/broker.yaml
 kubectl apply -f ./manifests/platform/koli-controller.yaml
@@ -270,12 +271,34 @@ kubectl patch svc kube-prom-exporter-kube-controller-manager -n kube-system --ty
 kubectl apply -f ./manifests/prom/kube-prom-alertmanager.yml
 
 ## Configure Platform Components
-
 kubectl apply -f manifests/prom/service-monitors
 kubectl apply -f manifests/prom/exporter-platform.yml
 
 # Heapster https://github.com/kubernetes/heapster
 helm install stable/heapster --name mon --set rbac.create=true --namespace kube-system
+
+# Add rbac to view heapster metrics
+kubectl apply -f manifests/k8s/allow-heapster-metrics.yml
+```
+
+## Add logdna
+
+```bash
+# https://app.logdna.com/manage/profile
+AGENT_KEY=
+kubectl create secret generic logdna-agent-key --from-literal=logdna-agent-key=$AGENT_KEY
+kubectl create -f https://raw.githubusercontent.com/logdna/logdna-agent/master/logdna-agent-ds.yaml
+```
+
+- Edit the DaemonSet with the `tolerations` below
+
+```yaml
+(...)
+tolerations:
+- key: "node-role.kubernetes.io/master"
+  operator: "Exists"
+  effect: "NoSchedule"
+(...)
 ```
 
 # Known Issues / Limitations
@@ -285,3 +308,5 @@ helm install stable/heapster --name mon --set rbac.create=true --namespace kube-
 - Grafana: Some metrics need to be customized to be show properly
 - EFS need to be created before applying the required manifests
 - Broker database must be created on new installations (EFS with empty data)
+- Prometheus has an alert manager bug: https://github.com/prometheus/prometheus/issues/3543
+
